@@ -1,0 +1,4 @@
+[submodule ".kilo"]
+	path = .kilo
+	url = https://github.com/Zlays/.kilo
+	branch = coding

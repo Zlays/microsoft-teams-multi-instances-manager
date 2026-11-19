@@ -53,3 +53,7 @@ npm-debug.log.*
 profiles/**
 logs/**
 config/**
+
+# Coding agent
+kilo.json
+AGENTS.md

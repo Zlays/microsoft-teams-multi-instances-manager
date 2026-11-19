@@ -55,5 +55,7 @@ logs/**
 config/**
 
 # Coding agent
+.agent
+.ua/
 kilo.json
 AGENTS.md

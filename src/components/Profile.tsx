@@ -1,37 +1,40 @@
-import React from 'react';
-import styled from 'styled-components';
-import Button from './Button';
-import { FlexItem, LeftFlexTextCSS } from './FlexCSS';
+import { Button } from './ui/button';
 
-const ProfileCSS = styled.div`
-  max-width: 80vw;
-  display: flex;
-  flex-flow: row nowrap;
-`;
-
-interface Props {
+export interface Props {
   text: string;
-  onRun: (T) => void;
-  onDelete: (T) => void;
+  onRun: (profile: string) => void;
+  onDelete: (profile: string) => void;
 }
 
-function Profile(props: Props) {
-  const { text, onRun, onDelete } = props;
+function Profile({ text, onRun, onDelete }: Props) {
+  if (!text) {
+    return null;
+  }
 
   return (
-    <>
-      {text ? (
-        <ProfileCSS>
-          <LeftFlexTextCSS>{text}</LeftFlexTextCSS>
-          <FlexItem>
-            <Button click={() => onRun(text)} text="run" />
-          </FlexItem>
-          <FlexItem>
-            <Button click={() => onDelete(text)} text="delete" />
-          </FlexItem>
-        </ProfileCSS>
-      ) : null}
-    </>
+    <div className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-card text-card-foreground shadow-sm hover:border-primary/40 transition-colors">
+      <span className="truncate font-medium text-sm text-foreground flex-1 pr-2">
+        {text}
+      </span>
+      <div className="flex items-center gap-2 shrink-0">
+        <Button
+          type="button"
+          size="sm"
+          variant="default"
+          onClick={() => onRun(text)}
+        >
+          run
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="destructive"
+          onClick={() => onDelete(text)}
+        >
+          delete
+        </Button>
+      </div>
+    </div>
   );
 }
 

@@ -1,15 +1,16 @@
 {
   "compilerOptions": {
-    "target": "ES2018",
+    "target": "ES2022",
     "module": "CommonJS",
-    "lib": ["dom", "esnext"],
+    "lib": ["dom", "dom.iterable", "esnext"],
     "declaration": true,
     "declarationMap": true,
     "noEmit": true,
-    "jsx": "react",
+    "jsx": "react-jsx",
     "strict": false,
     "pretty": false,
     "sourceMap": true,
+    "skipLibCheck": true,
     /* Additional Checks */
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -20,11 +21,17 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
-    "allowJs": true
+    "allowJs": true,
+    "incremental": true,
+    "isolatedModules": true
   },
+  "include": ["src/**/*", "next-env.d.ts"],
   "exclude": [
+    "node_modules",
     "test",
     "release",
+    "dist",
+    ".next",
     "src/main.prod.js",
     "src/renderer.prod.js",
     "src/dist",

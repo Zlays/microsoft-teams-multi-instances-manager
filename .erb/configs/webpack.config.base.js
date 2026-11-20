@@ -2,11 +2,11 @@
  * Base webpack config used across other specific configs
  */
 
-import path from 'path';
-import webpack from 'webpack';
-import { dependencies as externals } from '../../src/package.json';
+const path = require('path');
+const webpack = require('webpack');
+const { dependencies: externals } = require('../../src/package.json');
 
-export default {
+module.exports = {
   externals: [...Object.keys(externals || {})],
 
   module: {
@@ -18,6 +18,7 @@ export default {
           loader: 'babel-loader',
           options: {
             cacheDirectory: true,
+            configFile: path.resolve(__dirname, 'babel.config.js'),
           },
         },
       },

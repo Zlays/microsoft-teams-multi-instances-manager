@@ -1,169 +1,63 @@
 import React, { useEffect, useState } from 'react';
-import fs from 'fs';
-import { BrowserRouter as Router, Route, Switch } from 'react-router-dom';
-import './App.global.css';
-import { spawn } from 'child_process';
-import AutoLaunch from 'auto-launch';
-import { configPath, profilesPath, teamsPath } from './utils/ResourcesPath';
 import Profile from './components/Profile';
-import Button from './components/Button';
 import ErrorBox from './components/ErrorBox';
-import Logger from './utils/Logger';
 import inputValidator from './utils/Validator';
-import packageJSON from './package.json';
-import { Row } from './components/FlexCSS';
+import type { Settings } from './types/teams-api';
+import { Checkbox } from './components/ui/checkbox';
+import { Input } from './components/ui/input';
+import { Button } from './components/ui/button';
 
-const AutoLauncher = new AutoLaunch({
-  name: packageJSON.name,
-  author: packageJSON.author,
-});
-
-interface Settings {
-  onStartup: boolean;
-  autoLaunch: boolean;
-}
-
-const Main = () => {
+export const Main = () => {
   const [settings, setSettings] = useState<Settings>();
-  const [error, setError] = useState('');
-  const [profiles, setProfiles] = useState([]);
-  const [profileNameBox, setProfileNameBox] = useState('');
+  const [error, setError] = useState<string>('');
+  const [profiles, setProfiles] = useState<string[]>([]);
+  const [profileNameBox, setProfileNameBox] = useState<string>('');
 
-  function sleep(ms) {
-    return new Promise((resolve) => {
-      setTimeout(resolve, ms);
-    });
-  }
-
-  async function init() {
-    setError('');
-    setProfiles([]);
-    setProfileNameBox('');
-
-    await sleep(1250);
-
-    if (!fs.existsSync(profilesPath)) {
-      fs.mkdir(profilesPath, (err) => {
-        if (err) {
-          return Logger(err, 'error');
-        }
-        return Logger('Profile directory created');
-      });
-    }
-
-    if (!fs.existsSync(configPath)) {
-      fs.mkdir(configPath, (err) => {
-        if (err) {
-          return Logger(err, 'error');
-        }
-        return Logger('Config directory created');
-      });
-    }
-
-    return await sleep(1250);
-  }
-
-  function onRun(profile) {
-    const dir = profilesPath.concat('\\', profile);
-    const downloadDir = dir.concat('\\downloads');
-    fs.mkdir(downloadDir, (err) => {
-      if (err) {
-        return Logger(err, 'error');
-      }
-      return Logger(`Directory created successfully: ${downloadDir}`);
-    });
-
-    spawn('powershell', [`start ${teamsPath}\\current\\Teams.exe`], {
-      env: { USERPROFILE: profilesPath.concat('\\', profile) },
-    });
-    Logger(`${profile} is started!`);
-  }
-
-  function loadConfig(): boolean {
-    let data: string;
-    let json: Settings;
-    try {
-      data = fs.readFileSync(configPath.concat('\\file.config'), 'utf8');
-    } catch (err) {
-      json = {
-        onStartup: true,
-        autoLaunch: true,
-      };
-      Logger(`error loading configurations: ${err}`, 'error');
-    }
-    if (!json) json = JSON.parse(data);
-    if (!json) {
-      setSettings({
-        onStartup: true,
-        autoLaunch: true,
-      });
-    }
-    if (json.onStartup === null) json.onStartup = true;
-    if (json.autoLaunch === null) json.onStartup = true;
-    setSettings(json);
-    Logger(`config loaded: ${JSON.stringify(json)}`);
-    return json.onStartup;
-  }
-
-  useEffect(() => {
-    if (!settings) return;
-
-    fs.writeFile(
-      configPath.concat('\\file.config'),
-      JSON.stringify(settings),
-      'utf8',
-      (err) => {
-        if (err) return Logger(err, 'error');
-        return Logger('config updated');
-      }
-    );
-
-    AutoLauncher.isEnabled()
-      .then((isEnabled: boolean) => {
-        if (isEnabled && !settings.autoLaunch) {
-          AutoLauncher.disable();
-        } else if (!isEnabled && settings.autoLaunch) {
-          AutoLauncher.enable();
-        }
-        return !isEnabled;
-      })
-      .catch((err) => {
-        Logger(err, 'error');
-      });
-  }, [settings]);
-
-  useEffect(() => {
-    init()
-      .then(() => {
-        const checked = loadConfig();
-
-        fs.readdir(profilesPath, (err, files) => {
-          if (err) {
-            return Logger(err, 'error');
-          }
-          files.forEach((file) => {
-            if (fs.lstatSync(profilesPath.concat('\\', file)).isDirectory()) {
-              setProfiles((preValues) => [...preValues, file]);
-              if (checked) onRun(file);
-              Logger(`profile loaded: ${file}`);
-            }
-          });
-          return Logger('profile loader ended');
-        });
-
-        return Logger('Init ended');
-      })
-      .catch((err) => Logger(err, 'error'));
-  }, []);
-
-  function showError(text) {
+  function showError(text: string) {
     setError(text);
     setTimeout(() => setError(''), 5000);
   }
 
-  function addProfile() {
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadInitialData() {
+      if (typeof window === 'undefined' || !window.teamsManagerAPI) {
+        return;
+      }
+
+      try {
+        const [loadedSettings, loadedProfiles] = await Promise.all([
+          window.teamsManagerAPI.getSettings(),
+          window.teamsManagerAPI.getProfiles(),
+        ]);
+
+        if (!isMounted) return;
+
+        setSettings(loadedSettings);
+        setProfiles(loadedProfiles);
+
+        if (loadedSettings?.onStartup && Array.isArray(loadedProfiles)) {
+          for (const profile of loadedProfiles) {
+            window.teamsManagerAPI.launchProfile(profile);
+          }
+        }
+      } catch (err: unknown) {
+        if (isMounted) {
+          showError('Failed to load initial data');
+        }
+      }
+    }
+
+    loadInitialData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  async function addProfile() {
     const profileName = profileNameBox.trim();
-    const dir = profilesPath.concat('\\', profileName);
 
     if (!profileName) {
       return;
@@ -174,109 +68,140 @@ const Main = () => {
       return;
     }
 
-    fs.mkdir(dir, (err) => {
-      if (err) {
-        return Logger(err, 'error');
+    if (typeof window !== 'undefined' && window.teamsManagerAPI) {
+      try {
+        const res = await window.teamsManagerAPI.createProfile(profileName);
+        if (!res.success) {
+          showError(res.error || 'Failed to create profile');
+          return;
+        }
+        setProfiles((prev) => [...prev, profileName]);
+        setProfileNameBox('');
+      } catch (err: unknown) {
+        showError((err as Error).message || 'Failed to create profile');
       }
-      setProfiles((preValues) => [...preValues, profileName]);
-      return Logger(`Directory created successfully: ${dir}`);
-    });
-
-    setProfileNameBox('');
-    Logger(`profile added: ${profileName}`);
+    }
   }
 
-  function handleProfileNameBox({ target }) {
+  function handleProfileNameBox({ target }: React.ChangeEvent<HTMLInputElement>) {
     setProfileNameBox(() => inputValidator(target.value));
   }
 
-  function onDelete(profile) {
-    fs.rmdir(profilesPath.concat('\\', profile), { recursive: true }, (err) => {
-      if (err) {
+  async function onDelete(profile: string) {
+    if (typeof window !== 'undefined' && window.teamsManagerAPI) {
+      try {
+        const res = await window.teamsManagerAPI.deleteProfile(profile);
+        if (!res.success) {
+          showError(res.error || 'Please close Teams before deleting the profile');
+          return;
+        }
+        setProfiles((prev) => prev.filter((value) => value !== profile));
+      } catch (err: unknown) {
         showError('Please close Teams before deleting the profile');
-        return;
       }
-      setProfiles((preValues) =>
-        preValues.filter((value) => value !== profile)
-      );
-      Logger(`${profile} is deleted!`);
-    });
+    }
   }
 
-  function handleOnStartup({ target }) {
-    setSettings((prevState: Settings) => {
-      return {
-        ...prevState,
-        onStartup: target.checked,
-      };
-    });
-    Logger(`onStartup setted to: ${target.checked}`);
+  async function onRun(profile: string) {
+    if (typeof window !== 'undefined' && window.teamsManagerAPI) {
+      try {
+        const res = await window.teamsManagerAPI.launchProfile(profile);
+        if (!res.success) {
+          showError(res.error || 'Failed to launch profile');
+        }
+      } catch (err: unknown) {
+        showError((err as Error).message || 'Failed to launch profile');
+      }
+    }
   }
 
-  function handleAutoLaunch({ target }) {
-    setSettings((prevState: Settings) => {
-      return {
-        ...prevState,
-        autoLaunch: target.checked,
-      };
-    });
-    Logger(`onStartup setted to: ${target.checked}`);
+  async function handleOnStartup({ target }: React.ChangeEvent<HTMLInputElement>) {
+    if (!settings) return;
+    const newSettings: Settings = {
+      ...settings,
+      onStartup: target.checked,
+    };
+    setSettings(newSettings);
+    if (typeof window !== 'undefined' && window.teamsManagerAPI) {
+      try {
+        await window.teamsManagerAPI.updateSettings(newSettings);
+      } catch (err: unknown) {
+        showError('Failed to update settings');
+      }
+    }
+  }
+
+  async function handleAutoLaunch({ target }: React.ChangeEvent<HTMLInputElement>) {
+    if (!settings) return;
+    const newSettings: Settings = {
+      ...settings,
+      autoLaunch: target.checked,
+    };
+    setSettings(newSettings);
+    if (typeof window !== 'undefined' && window.teamsManagerAPI) {
+      try {
+        await window.teamsManagerAPI.updateSettings(newSettings);
+      } catch (err: unknown) {
+        showError('Failed to update settings');
+      }
+    }
   }
 
   return (
-    <div>
-      <ErrorBox text={error} />
+    <div className="h-screen flex flex-col bg-background text-foreground overflow-hidden select-none">
+      <ErrorBox text={error} onClose={() => setError('')} />
+
       {settings ? (
-        <Row>
-          <label htmlFor="onStartup">
-            <input
-              id="onStartup"
-              type="checkbox"
-              onChange={handleOnStartup}
-              checked={settings.onStartup}
-            />
-            Run instances on startup
-          </label>
-          <label htmlFor="autoLaunch">
-            <input
-              id="autoLaunch"
-              type="checkbox"
-              onChange={handleAutoLaunch}
-              checked={settings.autoLaunch}
-            />
-            Run app on startup
-          </label>
-        </Row>
+        <header className="p-3 border-b border-border bg-card/40 flex items-center justify-between gap-4">
+          <Checkbox
+            id="onStartup"
+            checked={settings.onStartup}
+            onChange={handleOnStartup}
+            label="Run instances on startup"
+          />
+          <Checkbox
+            id="autoLaunch"
+            checked={settings.autoLaunch}
+            onChange={handleAutoLaunch}
+            label="Run app on startup"
+          />
+        </header>
       ) : null}
-      <div>
-        <input
+
+      <section className="flex gap-2 p-3 border-b border-border">
+        <Input
           type="text"
           name="profileNameBox"
           placeholder="Enter profile name here..."
           value={profileNameBox}
           onChange={handleProfileNameBox}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              addProfile();
+            }
+          }}
+          className="flex-1"
         />
-        <Button text="Add profile" click={addProfile} />
-      </div>
+        <Button type="button" onClick={addProfile} variant="default">
+          Add profile
+        </Button>
+      </section>
 
-      {profiles.map((profile) => (
-        <React.Fragment key={profile}>
+      <main className="flex-1 overflow-y-auto p-3 space-y-2">
+        {profiles.map((profile) => (
           <Profile
+            key={profile}
             text={profile}
-            onRun={() => onRun(profile)}
-            onDelete={() => onDelete(profile)}
+            onRun={onRun}
+            onDelete={onDelete}
           />
-        </React.Fragment>
-      ))}
+        ))}
+      </main>
     </div>
   );
 };
+
 export default function App() {
-  return (
-    <Router>
-      <Switch>
-        <Route path="/" component={Main} />
-      </Switch>
-    </Router>
-  );
+  return <Main />;
 }

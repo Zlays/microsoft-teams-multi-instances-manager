@@ -1,12 +1,11 @@
 /* eslint global-require: off, no-console: off */
 
-import 'core-js/stable';
-import 'regenerator-runtime/runtime';
 import path from 'path';
+import fs from 'fs';
 import { app, BrowserWindow, shell, Menu, Tray } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
-import packageJSON from './package.json';
+import { registerIpcHandlers } from './main/ipcHandlers';
 
 export default class AppUpdater {
   constructor() {
@@ -28,20 +27,25 @@ if (
   process.env.NODE_ENV === 'development' ||
   process.env.DEBUG_PROD === 'true'
 ) {
-  require('electron-debug')();
+  app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 }
 
 const installExtensions = async () => {
-  const installer = require('electron-devtools-installer');
-  const forceDownload = !!process.env.UPGRADE_EXTENSIONS;
-  const extensions = ['REACT_DEVELOPER_TOOLS'];
+  if (!process.env.UPGRADE_EXTENSIONS) return;
+  try {
+    const installer = require('electron-devtools-installer');
+    const extensions = ['REACT_DEVELOPER_TOOLS'];
 
-  return installer
-    .default(
+    await installer.default(
       extensions.map((name) => installer[name]),
-      forceDownload
-    )
-    .catch(console.log);
+      true
+    );
+  } catch (err: unknown) {
+    console.warn(
+      'Notice: React Developer Tools extension could not be downloaded/installed:',
+      (err as Error)?.message || err
+    );
+  }
 };
 
 const createWindow = async () => {
@@ -79,7 +83,9 @@ const createWindow = async () => {
   let w = 400;
   const icon = getAssetPath('icon.png');
   const webPreferences = {
-    nodeIntegration: true,
+    nodeIntegration: false,
+    contextIsolation: true,
+    preload: path.join(__dirname, 'preload.js'),
   };
 
   if (process.env.NODE_ENV === 'production') {
@@ -108,7 +114,28 @@ const createWindow = async () => {
       webPreferences,
     });
   }
-  mainWindow.loadURL(`file://${__dirname}/index.html`);
+
+  if (
+    process.env.NODE_ENV === 'development' ||
+    process.env.DEBUG_PROD === 'true'
+  ) {
+    mainWindow.webContents.openDevTools();
+  }
+
+  if (process.env.NODE_ENV === 'development') {
+    const loadDevUrl = () => {
+      if (!mainWindow) return;
+      mainWindow.loadURL('http://localhost:3000').catch(() => {
+        setTimeout(loadDevUrl, 1000);
+      });
+    };
+    loadDevUrl();
+  } else {
+    const prodPath = path.join(__dirname, '../dist/renderer/index.html');
+    const fallbackPath = path.join(__dirname, 'index.html');
+    const indexPath = fs.existsSync(prodPath) ? prodPath : fallbackPath;
+    mainWindow.loadURL(`file://${indexPath}`);
+  }
 
   // @TODO: Use 'ready-to-show' event
   //        https://github.com/electron/electron/blob/master/docs/api/browser-window.md#using-ready-to-show-event
@@ -135,7 +162,7 @@ const createWindow = async () => {
     });
 
     tray.setContextMenu(trayMenu);
-    tray.setToolTip(packageJSON.name);
+    tray.setToolTip(app.name || 'microsoft-teams-instances-manager');
     mainWindow.hide();
   });
 
@@ -146,9 +173,9 @@ const createWindow = async () => {
   mainWindow.removeMenu();
 
   // Open urls in the user's browser
-  mainWindow.webContents.on('new-window', (event, url) => {
-    event.preventDefault();
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
+    return { action: 'deny' };
   });
 
   // Remove this if your app does not use auto updates
@@ -168,7 +195,13 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.whenReady().then(createWindow).catch(console.log);
+app
+  .whenReady()
+  .then(() => {
+    registerIpcHandlers();
+    return createWindow();
+  })
+  .catch(console.log);
 
 app.on('activate', () => {
   // On macOS it's common to re-create a window in the app when the

@@ -1,13 +1,38 @@
 import os from 'os';
+import path from 'path';
 
 const userPath = os.homedir();
 
-export const teamsPath = userPath.concat('\\AppData\\Local\\Microsoft\\Teams');
+export const teamsPath = path.join(
+  userPath,
+  'AppData',
+  'Local',
+  'Microsoft',
+  'Teams'
+);
 
-export const homePath = __dirname.substring(0, __dirname.lastIndexOf('\\'));
+export const homePath = path.join(
+  os.tmpdir(),
+  'microsoft-teams-instances-manager'
+);
 
-export const profilesPath = homePath.concat('\\profiles');
+export const profilesPath = path.join(
+  os.tmpdir(),
+  'microsoft-teams-instances-manager',
+  'profiles'
+);
 
-export const logsPath = homePath.concat('\\logs');
+export const logsPath = path.join(
+  os.tmpdir(),
+  'microsoft-teams-instances-manager',
+  'logs'
+);
 
-export const configPath = homePath.concat('\\config');
+export const configPath = path.join(
+  userPath,
+  'AppData',
+  'Roaming',
+  'microsoft-teams-instances-manager',
+  'config'
+);
+

@@ -1,8 +1,9 @@
 {
   "name": "microsoft-teams-instances-manager",
   "productName": "microsoft-teams-instances-manager",
-  "type": "commonjs",
+  "version": "1.0.3",
   "description": "",
+  "type": "commonjs",
   "scripts": {
     "build": "concurrently \"yarn build:main\" \"yarn build:renderer\"",
     "build:main": "cross-env NODE_OPTIONS=--openssl-legacy-provider NODE_ENV=production webpack --config ./.erb/configs/webpack.config.main.prod.babel.js",
